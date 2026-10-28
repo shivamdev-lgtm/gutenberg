@@ -52,6 +52,16 @@ function gutenberg_block_editor_preload_paths_7_2( $paths, $context ) {
 					}
 				)
 			);
+
+			// The author field of the post summary, shown to users who can
+			// assign authors, queries the users collection with
+			// `who=authors`, see `AuthorView` in packages/core-fields. The
+			// `rest_user_query` filter keeps that query from triggering the
+			// deprecation notice of `who` in `WP_User_Query` while preloading.
+			$post_type_object = get_post_type_object( $context->post->post_type );
+			if ( $post_type_object && current_user_can( $post_type_object->cap->edit_others_posts ) ) {
+				$paths[] = sprintf( '/wp/v2/users?context=view&include[0]=%d&who=authors', $author_id );
+			}
 		}
 	}
 

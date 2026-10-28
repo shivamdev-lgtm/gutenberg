@@ -499,3 +499,45 @@ function gutenberg_rest_only_include_revisioned_meta( $response, $post ) {
 	return $response;
 }
 add_filter( 'rest_prepare_revision', 'gutenberg_rest_only_include_revisioned_meta', 10, 2 );
+
+/**
+ * Maps the `who=authors` query of the users endpoint to the equivalent meta
+ * query.
+ *
+ * `who` is deprecated in `WP_User_Query` since 5.9.0, so querying the authors
+ * outside of a REST API request, like when preloading the author of the post
+ * summary in the post editor, prints the deprecation notice in the page when
+ * `WP_DEBUG` is on. The meta query is the one `WP_User_Query` builds for
+ * `who=authors`: the users with a non-zero user level on the site.
+ *
+ * Runs late so other filters still see the `who` argument.
+ *
+ * @param array $prepared_args Array of arguments for WP_User_Query.
+ * @return array Filtered arguments.
+ */
+function gutenberg_rest_user_query_map_who_authors( $prepared_args ) {
+	if ( ! isset( $prepared_args['who'] ) || 'authors' !== $prepared_args['who'] ) {
+		return $prepared_args;
+	}
+
+	global $wpdb;
+
+	$blog_id   = isset( $prepared_args['blog_id'] ) ? absint( $prepared_args['blog_id'] ) : get_current_blog_id();
+	$who_query = array(
+		'key'     => $wpdb->get_blog_prefix( $blog_id ) . 'user_level',
+		'value'   => 0,
+		'compare' => '!=',
+	);
+
+	unset( $prepared_args['who'] );
+	$prepared_args['meta_query'] = empty( $prepared_args['meta_query'] )
+		? array( $who_query )
+		: array(
+			'relation' => 'AND',
+			$prepared_args['meta_query'],
+			$who_query,
+		);
+
+	return $prepared_args;
+}
+add_filter( 'rest_user_query', 'gutenberg_rest_user_query_map_who_authors', PHP_INT_MAX );
